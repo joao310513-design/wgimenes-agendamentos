@@ -123,8 +123,8 @@ export default function WGimenesApp() {
     const e = validateEntrega();
     setEntregaErrors(e);
     if (Object.keys(e).length > 0) return;
-    const pix = gerarChavePix();
-    const taxa = TAXA_ENTREGA[entregaForm.cidade];
+    const pix = cfgPixChave || gerarChavePix();
+    const taxa = taxasAtuais[entregaForm.cidade];
     setEntregaSubmetida({ ...entregaForm, pix, taxa });
     setEntregaForm({ nome: "", endereco: "", cidade: "" });
     setEntregaErrors({});
@@ -132,8 +132,8 @@ export default function WGimenesApp() {
   }
 
   function handleGerarPix() {
-    const chave = gerarChavePix();
-    const taxa = pixCidade ? TAXA_ENTREGA[pixCidade] : null;
+    const chave = cfgPixChave || gerarChavePix();
+    const taxa = pixCidade ? taxasAtuais[pixCidade] : null;
     setPixGerado({ chave, cidade: pixCidade, taxa });
     setPixCopiado(false);
   }
