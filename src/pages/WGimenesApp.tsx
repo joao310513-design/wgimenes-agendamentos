@@ -59,6 +59,25 @@ export default function WGimenesApp() {
   const [adminTab, setAdminTab] = useState("bloqueios");
   const [adminData, setAdminData] = useState(todayStr);
 
+  const [cfgPixChave, setCfgPixChave] = useState(() => localStorage.getItem("wg_pix_chave") || "");
+  const [cfgTaxaCorumba, setCfgTaxaCorumba] = useState(() => {
+    const v = localStorage.getItem("wg_taxa_corumba"); return v ? parseFloat(v) : TAXA_ENTREGA["Corumbá"];
+  });
+  const [cfgTaxaLadario, setCfgTaxaLadario] = useState(() => {
+    const v = localStorage.getItem("wg_taxa_ladario"); return v ? parseFloat(v) : TAXA_ENTREGA["Ladário"];
+  });
+  const [cfgSalvo, setCfgSalvo] = useState(false);
+
+  const taxasAtuais: Record<string, number> = { "Corumbá": cfgTaxaCorumba, "Ladário": cfgTaxaLadario };
+
+  function salvarConfiguracoes() {
+    localStorage.setItem("wg_pix_chave", cfgPixChave);
+    localStorage.setItem("wg_taxa_corumba", String(cfgTaxaCorumba));
+    localStorage.setItem("wg_taxa_ladario", String(cfgTaxaLadario));
+    setCfgSalvo(true);
+    setTimeout(() => setCfgSalvo(false), 2500);
+  }
+
   const nav = useCallback((v: ViewId) => { setView(v); setMenuOpen(false); }, []);
 
   const getHorariosOcupados = (data: string) => {
