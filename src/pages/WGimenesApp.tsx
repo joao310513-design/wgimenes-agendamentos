@@ -594,8 +594,8 @@ export default function WGimenesApp() {
                 </button>
               </div>
 
-              <div className="flex gap-2 mb-5">
-                {([["bloqueios", "📅 Bloquear Horários"], ["agendamentos", `📋 Agendamentos (${agendamentos.length})`]] as const).map(([t, l]) => (
+              <div className="flex gap-2 mb-5 flex-wrap">
+                {([["bloqueios", "📅 Bloquear Horários"], ["agendamentos", `📋 Agendamentos (${agendamentos.length})`], ["config", "⚙️ Configurações"]] as const).map(([t, l]) => (
                   <button key={t} onClick={() => setAdminTab(t)} className={`${pillCn} px-4 py-2 text-xs font-semibold ${adminTab === t ? pillActive : pillInactive}`}>
                     {l}
                   </button>
