@@ -699,6 +699,31 @@ export default function WGimenesApp() {
                   </div>
                 </div>
               )}
+
+              {adminTab === "config" && (
+                <div className="bg-card/92 rounded-2xl p-6 shadow-md border border-border/40">
+                  <h3 className="text-base font-bold text-foreground font-display mb-1.5">⚙️ Configurações</h3>
+                  <p className="text-muted-foreground text-[13px] mb-5">Edite a chave Pix e os preços de entrega.</p>
+                  <div className="flex flex-col gap-4">
+                    <Field label="Chave Pix para pagamentos">
+                      <input className={inputCn} placeholder="Ex: sua-chave-pix@email.com" value={cfgPixChave}
+                        onChange={e => setCfgPixChave(e.target.value)} />
+                      <span className="text-[11px] text-muted-foreground mt-0.5">Se vazia, uma chave aleatória será gerada a cada pedido.</span>
+                    </Field>
+                    <Field label="Taxa de entrega — Corumbá (R$)">
+                      <input type="number" step="0.50" min="0" className={inputCn} value={cfgTaxaCorumba}
+                        onChange={e => setCfgTaxaCorumba(parseFloat(e.target.value) || 0)} />
+                    </Field>
+                    <Field label="Taxa de entrega — Ladário (R$)">
+                      <input type="number" step="0.50" min="0" className={inputCn} value={cfgTaxaLadario}
+                        onChange={e => setCfgTaxaLadario(parseFloat(e.target.value) || 0)} />
+                    </Field>
+                    <button onClick={salvarConfiguracoes} className="w-full bg-primary text-primary-foreground rounded-full py-3 text-sm font-semibold tracking-wide hover:opacity-90 transition-opacity mt-1">
+                      {cfgSalvo ? "✓ Salvo com sucesso!" : "💾 Salvar configurações"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )
         )}
