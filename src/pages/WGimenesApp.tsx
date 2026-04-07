@@ -59,6 +59,25 @@ export default function WGimenesApp() {
   const [adminTab, setAdminTab] = useState("bloqueios");
   const [adminData, setAdminData] = useState(todayStr);
 
+  const [cfgPixChave, setCfgPixChave] = useState(() => localStorage.getItem("wg_pix_chave") || "");
+  const [cfgTaxaCorumba, setCfgTaxaCorumba] = useState(() => {
+    const v = localStorage.getItem("wg_taxa_corumba"); return v ? parseFloat(v) : TAXA_ENTREGA["Corumbá"];
+  });
+  const [cfgTaxaLadario, setCfgTaxaLadario] = useState(() => {
+    const v = localStorage.getItem("wg_taxa_ladario"); return v ? parseFloat(v) : TAXA_ENTREGA["Ladário"];
+  });
+  const [cfgSalvo, setCfgSalvo] = useState(false);
+
+  const taxasAtuais: Record<string, number> = { "Corumbá": cfgTaxaCorumba, "Ladário": cfgTaxaLadario };
+
+  function salvarConfiguracoes() {
+    localStorage.setItem("wg_pix_chave", cfgPixChave);
+    localStorage.setItem("wg_taxa_corumba", String(cfgTaxaCorumba));
+    localStorage.setItem("wg_taxa_ladario", String(cfgTaxaLadario));
+    setCfgSalvo(true);
+    setTimeout(() => setCfgSalvo(false), 2500);
+  }
+
   const nav = useCallback((v: ViewId) => { setView(v); setMenuOpen(false); }, []);
 
   const getHorariosOcupados = (data: string) => {
@@ -104,8 +123,8 @@ export default function WGimenesApp() {
     const e = validateEntrega();
     setEntregaErrors(e);
     if (Object.keys(e).length > 0) return;
-    const pix = gerarChavePix();
-    const taxa = TAXA_ENTREGA[entregaForm.cidade];
+    const pix = cfgPixChave || gerarChavePix();
+    const taxa = taxasAtuais[entregaForm.cidade];
     setEntregaSubmetida({ ...entregaForm, pix, taxa });
     setEntregaForm({ nome: "", endereco: "", cidade: "" });
     setEntregaErrors({});
@@ -113,8 +132,8 @@ export default function WGimenesApp() {
   }
 
   function handleGerarPix() {
-    const chave = gerarChavePix();
-    const taxa = pixCidade ? TAXA_ENTREGA[pixCidade] : null;
+    const chave = cfgPixChave || gerarChavePix();
+    const taxa = pixCidade ? taxasAtuais[pixCidade] : null;
     setPixGerado({ chave, cidade: pixCidade, taxa });
     setPixCopiado(false);
   }
@@ -575,8 +594,8 @@ export default function WGimenesApp() {
                 </button>
               </div>
 
-              <div className="flex gap-2 mb-5">
-                {([["bloqueios", "📅 Bloquear Horários"], ["agendamentos", `📋 Agendamentos (${agendamentos.length})`]] as const).map(([t, l]) => (
+              <div className="flex gap-2 mb-5 flex-wrap">
+                {([["bloqueios", "📅 Bloquear Horários"], ["agendamentos", `📋 Agendamentos (${agendamentos.length})`], ["config", "⚙️ Configurações"]] as const).map(([t, l]) => (
                   <button key={t} onClick={() => setAdminTab(t)} className={`${pillCn} px-4 py-2 text-xs font-semibold ${adminTab === t ? pillActive : pillInactive}`}>
                     {l}
                   </button>
@@ -677,6 +696,31 @@ export default function WGimenesApp() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {adminTab === "config" && (
+                <div className="bg-card/92 rounded-2xl p-6 shadow-md border border-border/40">
+                  <h3 className="text-base font-bold text-foreground font-display mb-1.5">⚙️ Configurações</h3>
+                  <p className="text-muted-foreground text-[13px] mb-5">Edite a chave Pix e os preços de entrega.</p>
+                  <div className="flex flex-col gap-4">
+                    <Field label="Chave Pix para pagamentos">
+                      <input className={inputCn} placeholder="Ex: sua-chave-pix@email.com" value={cfgPixChave}
+                        onChange={e => setCfgPixChave(e.target.value)} />
+                      <span className="text-[11px] text-muted-foreground mt-0.5">Se vazia, uma chave aleatória será gerada a cada pedido.</span>
+                    </Field>
+                    <Field label="Taxa de entrega — Corumbá (R$)">
+                      <input type="number" step="0.50" min="0" className={inputCn} value={cfgTaxaCorumba}
+                        onChange={e => setCfgTaxaCorumba(parseFloat(e.target.value) || 0)} />
+                    </Field>
+                    <Field label="Taxa de entrega — Ladário (R$)">
+                      <input type="number" step="0.50" min="0" className={inputCn} value={cfgTaxaLadario}
+                        onChange={e => setCfgTaxaLadario(parseFloat(e.target.value) || 0)} />
+                    </Field>
+                    <button onClick={salvarConfiguracoes} className="w-full bg-primary text-primary-foreground rounded-full py-3 text-sm font-semibold tracking-wide hover:opacity-90 transition-opacity mt-1">
+                      {cfgSalvo ? "✓ Salvo com sucesso!" : "💾 Salvar configurações"}
+                    </button>
                   </div>
                 </div>
               )}
