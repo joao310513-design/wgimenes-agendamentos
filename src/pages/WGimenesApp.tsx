@@ -6,6 +6,7 @@ import {
   getHorariosForDate, gerarChavePix, gerarWA, gerarWAEntrega,
 } from "@/lib/helpers";
 import { Menu, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 /* ────── Field ────── */
 function Field({ label, error, children }: { label: string; error?: string | null; children: React.ReactNode }) {
@@ -23,15 +24,63 @@ export default function WGimenesApp() {
   const [view, setView] = useState<ViewId>("home");
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const [agendamentos, setAgendamentos] = useState<Agendamento[]>(() => {
-    try { return JSON.parse(localStorage.getItem("wg_agendamentos") || "[]"); } catch { return []; }
-  });
-  const [bloqueios, setBloqueios] = useState<Record<string, string[]>>(() => {
-    try { return JSON.parse(localStorage.getItem("wg_bloqueios") || "{}"); } catch { return {}; }
-  });
+  const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
+  const [bloqueios, setBloqueios] = useState<Record<string, string[]>>({});
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { localStorage.setItem("wg_agendamentos", JSON.stringify(agendamentos)); }, [agendamentos]);
-  useEffect(() => { localStorage.setItem("wg_bloqueios", JSON.stringify(bloqueios)); }, [bloqueios]);
+  // Load data from Supabase on mount
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      try {
+        // Load agendamentos
+        const { data: agsData } = await supabase
+          .from("agendamentos")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (agsData) {
+          setAgendamentos(agsData.map(a => ({
+            id: a.id,
+            nome: a.nome,
+            telefone: a.telefone,
+            data: a.data,
+            horario: a.horario,
+            status: a.status as Agendamento["status"],
+            servico: a.servico,
+          })));
+        }
+
+        // Load bloqueios
+        const { data: bloqData } = await supabase
+          .from("horarios_bloqueados")
+          .select("*");
+        if (bloqData) {
+          const map: Record<string, string[]> = {};
+          bloqData.forEach(b => {
+            if (!map[b.data]) map[b.data] = [];
+            map[b.data].push(b.horario);
+          });
+          setBloqueios(map);
+        }
+
+        // Load configs
+        const { data: cfgData } = await supabase
+          .from("configuracoes")
+          .select("*");
+        if (cfgData) {
+          cfgData.forEach(c => {
+            if (c.chave === "pix_chave") setCfgPixChave(c.valor);
+            if (c.chave === "taxa_corumba") setCfgTaxaCorumba(parseFloat(c.valor) || TAXA_ENTREGA["Corumbá"]);
+            if (c.chave === "taxa_ladario") setCfgTaxaLadario(parseFloat(c.valor) || TAXA_ENTREGA["Ladário"]);
+          });
+        }
+      } catch (err) {
+        console.error("Error loading data:", err);
+      }
+      setLoading(false);
+    }
+    loadData();
+  }, []);
 
   const [form, setForm] = useState({ nome: "", telefone: "", data: "", horario: "" });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -59,21 +108,19 @@ export default function WGimenesApp() {
   const [adminTab, setAdminTab] = useState("bloqueios");
   const [adminData, setAdminData] = useState(todayStr);
 
-  const [cfgPixChave, setCfgPixChave] = useState(() => localStorage.getItem("wg_pix_chave") || "");
-  const [cfgTaxaCorumba, setCfgTaxaCorumba] = useState(() => {
-    const v = localStorage.getItem("wg_taxa_corumba"); return v ? parseFloat(v) : TAXA_ENTREGA["Corumbá"];
-  });
-  const [cfgTaxaLadario, setCfgTaxaLadario] = useState(() => {
-    const v = localStorage.getItem("wg_taxa_ladario"); return v ? parseFloat(v) : TAXA_ENTREGA["Ladário"];
-  });
+  const [cfgPixChave, setCfgPixChave] = useState("");
+  const [cfgTaxaCorumba, setCfgTaxaCorumba] = useState(TAXA_ENTREGA["Corumbá"]);
+  const [cfgTaxaLadario, setCfgTaxaLadario] = useState(TAXA_ENTREGA["Ladário"]);
   const [cfgSalvo, setCfgSalvo] = useState(false);
 
   const taxasAtuais: Record<string, number> = { "Corumbá": cfgTaxaCorumba, "Ladário": cfgTaxaLadario };
 
-  function salvarConfiguracoes() {
-    localStorage.setItem("wg_pix_chave", cfgPixChave);
-    localStorage.setItem("wg_taxa_corumba", String(cfgTaxaCorumba));
-    localStorage.setItem("wg_taxa_ladario", String(cfgTaxaLadario));
+  async function salvarConfiguracoes() {
+    await Promise.all([
+      supabase.from("configuracoes").update({ valor: cfgPixChave, updated_at: new Date().toISOString() }).eq("chave", "pix_chave"),
+      supabase.from("configuracoes").update({ valor: String(cfgTaxaCorumba), updated_at: new Date().toISOString() }).eq("chave", "taxa_corumba"),
+      supabase.from("configuracoes").update({ valor: String(cfgTaxaLadario), updated_at: new Date().toISOString() }).eq("chave", "taxa_ladario"),
+    ]);
     setCfgSalvo(true);
     setTimeout(() => setCfgSalvo(false), 2500);
   }
@@ -99,11 +146,31 @@ export default function WGimenesApp() {
     return e;
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     const e = validateAg();
     setFormErrors(e);
     if (Object.keys(e).length > 0) return;
-    const novo: Agendamento = { ...form, id: Date.now(), status: "pendente", servico: "Visita à Loja" };
+
+    const { data: inserted, error } = await supabase
+      .from("agendamentos")
+      .insert({ nome: form.nome, telefone: form.telefone, data: form.data, horario: form.horario, servico: "Visita à Loja", status: "pendente" })
+      .select()
+      .single();
+
+    if (error || !inserted) {
+      console.error("Error inserting agendamento:", error);
+      return;
+    }
+
+    const novo: Agendamento = {
+      id: inserted.id,
+      nome: inserted.nome,
+      telefone: inserted.telefone,
+      data: inserted.data,
+      horario: inserted.horario,
+      status: inserted.status as Agendamento["status"],
+      servico: inserted.servico,
+    };
     setAgendamentos(prev => [...prev, novo]);
     setSubmitted(novo);
     setForm({ nome: "", telefone: "", data: "", horario: "" });
@@ -149,20 +216,27 @@ export default function WGimenesApp() {
     else setAdminErro(true);
   }
 
-  function toggleBloqueio(data: string, h: string) {
-    setBloqueios(prev => {
-      const atual = prev[data] || [];
-      const novo = atual.includes(h) ? atual.filter(x => x !== h) : [...atual, h];
-      return { ...prev, [data]: novo };
-    });
+  async function toggleBloqueio(data: string, h: string) {
+    const atual = bloqueios[data] || [];
+    if (atual.includes(h)) {
+      // Remove
+      await supabase.from("horarios_bloqueados").delete().eq("data", data).eq("horario", h);
+      setBloqueios(prev => ({ ...prev, [data]: (prev[data] || []).filter(x => x !== h) }));
+    } else {
+      // Add
+      await supabase.from("horarios_bloqueados").insert({ data, horario: h });
+      setBloqueios(prev => ({ ...prev, [data]: [...(prev[data] || []), h] }));
+    }
   }
 
-  function alterarStatus(id: number, st: Agendamento["status"]) {
+  async function alterarStatus(id: number, st: Agendamento["status"]) {
+    await supabase.from("agendamentos").update({ status: st }).eq("id", id);
     setAgendamentos(prev => prev.map(a => a.id === id ? { ...a, status: st } : a));
   }
 
-  function deletarAg(id: number) {
+  async function deletarAg(id: number) {
     if (!window.confirm("Excluir agendamento?")) return;
+    await supabase.from("agendamentos").delete().eq("id", id);
     setAgendamentos(prev => prev.filter(a => a.id !== id));
   }
 
@@ -182,6 +256,17 @@ export default function WGimenesApp() {
   const pillCn = "rounded-full px-3.5 py-1.5 text-xs font-medium border transition-all duration-200 cursor-pointer";
   const pillActive = "bg-primary text-primary-foreground border-primary";
   const pillInactive = "bg-transparent text-muted-foreground border-border hover:border-primary/50";
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-2xl text-primary animate-pulse font-display mb-2">✦</div>
+          <p className="text-muted-foreground text-sm">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground font-body relative overflow-hidden">
@@ -477,7 +562,7 @@ export default function WGimenesApp() {
             <h2 className="text-xl font-bold text-foreground mb-1.5 font-display">🛵 Solicitar Entrega</h2>
             <p className="text-muted-foreground text-[13px] mb-5">Receba seus produtos em casa. Atendemos Corumbá e Ladário.</p>
             <div className="flex gap-3 mb-5">
-              {Object.entries(TAXA_ENTREGA).map(([c, t]) => (
+              {Object.entries(taxasAtuais).map(([c, t]) => (
                 <div key={c} className="flex-1 bg-primary/5 rounded-xl p-3.5 text-center border border-border/40">
                   <div className="text-[13px] text-muted-foreground mb-1">{c === "Corumbá" ? "🏙️" : "🏘️"} {c}</div>
                   <div className="text-xl font-bold text-primary font-display">R$ {t.toFixed(2)}</div>
@@ -498,7 +583,7 @@ export default function WGimenesApp() {
                       className={`flex-1 min-w-[120px] border rounded-xl py-3 px-2 flex flex-col items-center gap-1 text-[13px] font-medium transition-all
                         ${entregaForm.cidade === c ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:border-primary/50"}`}>
                       {c === "Corumbá" ? "🏙️" : "🏘️"} {c}
-                      <span className="text-[11px] font-bold">R$ {TAXA_ENTREGA[c].toFixed(2)}</span>
+                      <span className="text-[11px] font-bold">R$ {taxasAtuais[c].toFixed(2)}</span>
                     </button>
                   ))}
                 </div>
@@ -506,7 +591,7 @@ export default function WGimenesApp() {
             </div>
             {entregaForm.cidade && (
               <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-[13px] text-muted-foreground mt-2">
-                💰 Taxa para <strong>{entregaForm.cidade}</strong>: <strong className="text-primary">R$ {TAXA_ENTREGA[entregaForm.cidade].toFixed(2)}</strong>
+                💰 Taxa para <strong>{entregaForm.cidade}</strong>: <strong className="text-primary">R$ {taxasAtuais[entregaForm.cidade].toFixed(2)}</strong>
               </div>
             )}
             <button onClick={handleEntregaSubmit} className="mt-5 w-full bg-primary text-primary-foreground rounded-full py-3.5 text-sm font-semibold tracking-wide hover:opacity-90 transition-opacity">
@@ -527,7 +612,7 @@ export default function WGimenesApp() {
                     className={`flex-1 min-w-[100px] border rounded-xl py-2.5 px-2 flex flex-col items-center gap-1 text-xs font-medium transition-all
                       ${pixCidade === c ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border hover:border-primary/50"}`}>
                     {lbl}
-                    {c && <span className="text-[11px] font-bold">R$ {TAXA_ENTREGA[c as string].toFixed(2)}</span>}
+                    {c && <span className="text-[11px] font-bold">R$ {taxasAtuais[c as string].toFixed(2)}</span>}
                   </button>
                 ))}
               </div>
