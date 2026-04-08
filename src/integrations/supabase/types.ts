@@ -14,7 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      agendamentos: {
+        Row: {
+          created_at: string
+          data: string
+          horario: string
+          id: number
+          nome: string
+          servico: string
+          status: string
+          telefone: string
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          horario: string
+          id?: number
+          nome: string
+          servico?: string
+          status?: string
+          telefone: string
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          horario?: string
+          id?: number
+          nome?: string
+          servico?: string
+          status?: string
+          telefone?: string
+        }
+        Relationships: []
+      }
+      configuracoes: {
+        Row: {
+          chave: string
+          id: number
+          updated_at: string
+          valor: string
+        }
+        Insert: {
+          chave: string
+          id?: number
+          updated_at?: string
+          valor: string
+        }
+        Update: {
+          chave?: string
+          id?: number
+          updated_at?: string
+          valor?: string
+        }
+        Relationships: []
+      }
+      horarios_bloqueados: {
+        Row: {
+          created_at: string
+          data: string
+          horario: string
+          id: number
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          horario: string
+          id?: number
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          horario?: string
+          id?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
